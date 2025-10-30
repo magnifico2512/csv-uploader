@@ -1,0 +1,1462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSV Upload Manager - Google Drive</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 16px;
+        }
+        
+        .user-info {
+            display: none;
+            padding: 15px 30px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+        
+        .user-info.show {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .sign-out-btn {
+            padding: 8px 20px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .sign-out-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        .auth-section {
+            padding: 40px;
+            text-align: center;
+        }
+        
+        .auth-section.hidden {
+            display: none;
+        }
+        
+        .remember-me {
+            margin: 20px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+        
+        .remember-me input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+        
+        .remember-me label {
+            cursor: pointer;
+        }
+        
+        .sign-in-btn {
+            padding: 16px 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            transition: all 0.3s;
+        }
+        
+        .sign-in-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(102, 126, 234, 0.5);
+        }
+        
+        .main-content {
+            padding: 30px;
+            display: none;
+        }
+        
+        .main-content.active {
+            display: block;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-secondary {
+            background: #f1f3f4;
+            color: #333;
+        }
+        
+        .btn-secondary:hover {
+            background: #e8eaed;
+        }
+
+        .btn-secondary.active {
+            background: #ffc107;
+            color: #000;
+            font-weight: 700;
+            box-shadow: 0 2px 8px rgba(255, 193, 7, 0.4);
+        }
+
+        .btn-secondary.active:hover {
+            background: #ffb300;
+        }
+        
+        .folders-list {
+            margin-bottom: 30px;
+        }
+        
+        .folder-item {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 2px solid transparent;
+        }
+        
+        .folder-item:hover {
+            background: #e8eaed;
+            border-color: #667eea;
+        }
+        
+        .folder-item.selected {
+            background: #e8f0fe;
+            border-color: #667eea;
+        }
+
+        .folder-item.drag-over-folder {
+            background: #c8e6c9 !important;
+            border-color: #4caf50 !important;
+            transform: scale(1.02);
+            box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+        }
+
+        .folder-item.subfolder {
+            background: #fff;
+            border-left: 3px solid #667eea;
+        }
+
+        .folder-item.subfolder:hover {
+            background: #f0f4ff;
+        }
+
+        .folder-item.level-1 {
+            margin-left: 40px;
+        }
+
+        .folder-item.level-2 {
+            margin-left: 80px;
+            border-left-color: #8b9dc3;
+        }
+
+        .folder-item.level-3 {
+            margin-left: 120px;
+            border-left-color: #a8b5d1;
+        }
+
+        .folder-item.level-4 {
+            margin-left: 160px;
+            border-left-color: #c5cfe0;
+        }
+
+        .folder-item.level-5 {
+            margin-left: 200px;
+            border-left-color: #d9e1ec;
+        }
+        
+        .folder-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+        }
+
+        .expand-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 18px;
+            padding: 4px;
+            line-height: 1;
+            color: #666;
+            transition: transform 0.2s;
+        }
+
+        .expand-btn:hover {
+            color: #333;
+        }
+
+        .expand-btn.expanded {
+            transform: rotate(90deg);
+        }
+
+        .expand-btn.loading {
+            opacity: 0.5;
+        }
+        
+        .folder-icon {
+            font-size: 24px;
+        }
+        
+        .folder-name {
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .folder-path {
+            font-size: 13px;
+            color: #666;
+        }
+        
+        .remove-folder-btn {
+            padding: 6px 12px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .remove-folder-btn:hover {
+            background: #c82333;
+        }
+        
+        .star-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 24px;
+            transition: transform 0.2s;
+            padding: 4px;
+            line-height: 1;
+        }
+        
+        .star-btn:hover {
+            transform: scale(1.2);
+        }
+        
+        .open-folder-btn {
+            padding: 6px 10px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .open-folder-btn:hover {
+            background: #5568d3;
+            transform: translateY(-1px);
+        }
+        
+        .upload-area {
+            border: 3px dashed #ccc;
+            border-radius: 12px;
+            padding: 60px 40px;
+            text-align: center;
+            background: #f8f9fa;
+            margin-bottom: 30px;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+        
+        .upload-area.drag-over {
+            border-color: #667eea;
+            background: #e8f0fe;
+            transform: scale(1.02);
+        }
+        
+        .upload-area.has-files {
+            border-style: solid;
+            border-color: #667eea;
+            padding: 30px;
+        }
+        
+        .upload-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+        
+        .upload-text {
+            font-size: 20px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .upload-hint {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .files-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .file-item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid #e8eaed;
+        }
+        
+        .file-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+        }
+        
+        .file-info span {
+            font-size: 24px;
+        }
+        
+        .file-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+        
+        .file-size {
+            font-size: 13px;
+            color: #666;
+        }
+        
+        .file-folder-name {
+            font-size: 13px;
+            color: #667eea;
+            font-weight: 500;
+        }
+        
+        .remove-file-btn {
+            width: 32px;
+            height: 32px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        
+        .remove-file-btn:hover {
+            background: #c82333;
+            transform: scale(1.1);
+        }
+        
+        .progress-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 12px;
+            display: none;
+        }
+        
+        .progress-section.active {
+            display: block;
+        }
+        
+        .progress-text {
+            text-align: center;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 15px;
+        }
+        
+        .progress-bar {
+            height: 30px;
+            background: #e8eaed;
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        
+        .results {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .result-item {
+            padding: 10px 15px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        
+        .result-item.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .result-item.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 40px;
+            color: #666;
+        }
+        
+        .empty-state-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+        
+        .empty-state h3 {
+            font-size: 20px;
+            margin-bottom: 10px;
+        }
+        
+        .empty-state p {
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 CSV Upload Manager</h1>
+            <p>Upload CSV files to multiple Google Drive folders at once</p>
+            <div class="user-info" id="userInfo">
+                <span id="userEmail"></span>
+                <button class="sign-out-btn" onclick="handleSignoutClick()">Sign Out</button>
+            </div>
+        </div>
+        
+        <!-- Auth Section -->
+        <div class="auth-section" id="authSection">
+            <h2 style="margin-bottom: 20px;">Sign in with Google</h2>
+            <p style="color: #666; margin-bottom: 30px;">Access your Google Drive to upload CSV files</p>
+            <div class="remember-me">
+                <input type="checkbox" id="rememberMe" checked>
+                <label for="rememberMe">Stay signed in (recommended)</label>
+            </div>
+            <button class="sign-in-btn" onclick="handleAuthClick()">
+                Sign In with Google
+            </button>
+        </div>
+        
+        <!-- Main Content -->
+        <div class="main-content" id="mainContent">
+            <div class="controls">
+                <button class="btn" onclick="selectFolder()">
+                    📂 Add Folder
+                </button>
+                <button class="btn btn-secondary" onclick="showStarredFolders()" id="starredBtn">
+                    ⭐ Show Starred (<span id="starredCount">0</span>)
+                </button>
+                <button class="btn btn-secondary" onclick="clearAll()">
+                    🗑️ Clear All
+                </button>
+                <button class="btn" id="uploadBtn" onclick="uploadFiles()" disabled style="margin-left: auto;">
+                    🚀 Upload All Files (<span id="fileCount">0</span>)
+                </button>
+            </div>
+            
+            <div class="folders-list" id="foldersList">
+                <div class="empty-state">
+                    <div class="empty-state-icon">📂</div>
+                    <h3>No folders selected</h3>
+                    <p>Click "Add Folder" to choose upload destinations</p>
+                </div>
+            </div>
+            
+            <div class="upload-area" id="uploadArea" 
+                 ondrop="handleDrop(event)" 
+                 ondragover="handleDragOver(event)" 
+                 ondragleave="handleDragLeave(event)"
+                 onclick="selectFiles()">
+                <div class="upload-icon">⬇️</div>
+                <div class="upload-text">Drag and drop CSV files here</div>
+                <div class="upload-hint">or click to browse</div>
+            </div>
+            
+            <input type="file" id="fileInput" accept=".csv" multiple style="display: none;" onchange="handleFileSelect(event)">
+            
+            <div class="progress-section" id="progressSection">
+                <div class="progress-text" id="progressText">Uploading files...</div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="results" id="results"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Google API -->
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://accounts.google.com/gsi/client"></script>
+    
+    <script>
+        // =============================================================
+        // CONFIGURATION
+        // =============================================================
+        
+        const CLIENT_ID = '135674615981-nfgtkmknauaq8djheo48d7edb8cmker6.apps.googleusercontent.com';
+        const API_KEY = 'AIzaSyApT-2ATV8f34WuYg_tYNCmj8rFA4XLe4I';
+        const SCOPES = 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/userinfo.email';
+        
+        // =============================================================
+        // State
+        // =============================================================
+        
+        let tokenClient;
+        let accessToken = null;
+        let gapiInited = false;
+        let gisInited = false;
+        
+        let selectedFolders = [];
+        let filesToUpload = [];
+        let starredFolderIds = [];
+        let starredFoldersData = {};
+        let expandedFolders = {}; // Track which folders are expanded
+        let isStarredView = false; // NEW: Track if we're viewing starred folders
+        
+        // =============================================================
+        // Initialize
+        // =============================================================
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            loadStarredFolders();
+            gapiLoaded();
+            gisLoaded();
+        });
+        
+        // =============================================================
+        // Starred Folders
+        // =============================================================
+        
+        function loadStarredFolders() {
+            const saved = localStorage.getItem('starredFolders');
+            if (saved) {
+                try {
+                    const data = JSON.parse(saved);
+                    starredFolderIds = data.ids || [];
+                    starredFoldersData = data.folders || {};
+                    console.log('Loaded starred folders:', starredFolderIds.length);
+                } catch (e) {
+                    console.error('Error loading starred folders:', e);
+                    starredFolderIds = [];
+                    starredFoldersData = {};
+                }
+            }
+            updateStarredCount();
+        }
+        
+        function saveStarredFolders() {
+            const data = {
+                ids: starredFolderIds,
+                folders: starredFoldersData
+            };
+            localStorage.setItem('starredFolders', JSON.stringify(data));
+            console.log('Saved starred folders:', starredFolderIds.length);
+        }
+        
+        function toggleStar(folderId) {
+            const index = starredFolderIds.indexOf(folderId);
+            
+            if (index > -1) {
+                starredFolderIds.splice(index, 1);
+                delete starredFoldersData[folderId];
+                console.log('Unstarred folder:', folderId);
+            } else {
+                const folder = selectedFolders.find(f => f.id === folderId);
+                if (folder) {
+                    starredFolderIds.push(folderId);
+                    starredFoldersData[folderId] = {
+                        id: folder.id,
+                        name: folder.name,
+                        path: folder.path || 'My Drive'
+                    };
+                    console.log('Starred folder:', folder.name, folderId);
+                }
+            }
+            
+            saveStarredFolders();
+            renderFolders();
+            updateStarredCount();
+        }
+        
+        function isStarred(folderId) {
+            return starredFolderIds.includes(folderId);
+        }
+        
+        function updateStarredCount() {
+            const count = starredFolderIds.length;
+            document.getElementById('starredCount').textContent = count;
+            console.log('Updated starred count:', count);
+        }
+        
+        function showStarredFolders() {
+            console.log('Show starred clicked. Starred count:', starredFolderIds.length);
+            
+            if (starredFolderIds.length === 0) {
+                alert('No starred folders yet!\n\n1. Add a folder\n2. Click the ☆ to star it\n3. Then use this button to load all starred folders');
+                return;
+            }
+            
+            // Set starred view mode
+            isStarredView = true;
+            updateStarredButton();
+            
+            // Clear current selection
+            selectedFolders = [];
+            
+            // Load from saved data
+            let loaded = 0;
+            for (const folderId of starredFolderIds) {
+                if (starredFoldersData[folderId]) {
+                    selectedFolders.push(starredFoldersData[folderId]);
+                    loaded++;
+                } else {
+                    console.warn('Missing data for starred folder:', folderId);
+                }
+            }
+            
+            console.log('Loaded', loaded, 'starred folders');
+            renderFolders();
+        }
+
+        function updateStarredButton() {
+            const btn = document.getElementById('starredBtn');
+            if (isStarredView) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        }
+
+        function exitStarredView() {
+            isStarredView = false;
+            updateStarredButton();
+        }
+        
+        // =============================================================
+        // Google API Setup
+        // =============================================================
+        
+        function gapiLoaded() {
+            gapi.load('client:picker', async () => {
+                await initializeGapiClient();
+            });
+        }
+        
+        async function initializeGapiClient() {
+            try {
+                await gapi.client.init({
+                    apiKey: API_KEY,
+                    discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
+                });
+                gapiInited = true;
+                console.log('✓ GAPI initialized');
+                maybeEnableButtons();
+                checkSavedAuth();
+            } catch (error) {
+                console.error('Error initializing GAPI:', error);
+            }
+        }
+        
+        function gisLoaded() {
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: CLIENT_ID,
+                scope: SCOPES,
+                ux_mode: 'popup',
+                callback: '',
+            });
+            gisInited = true;
+            console.log('✓ GIS initialized');
+            maybeEnableButtons();
+        }
+        
+        function maybeEnableButtons() {
+            if (gapiInited && gisInited) {
+                console.log('✓ Ready for authentication');
+            }
+        }
+        
+        // =============================================================
+        // Persistent Auth
+        // =============================================================
+        
+        function checkSavedAuth() {
+            if (!gapiInited) {
+                console.log('⏳ Waiting for GAPI to initialize...');
+                return;
+            }
+            
+            const savedToken = localStorage.getItem('googleAccessToken');
+            const savedExpiry = localStorage.getItem('googleTokenExpiry');
+            
+            if (savedToken && savedExpiry) {
+                const now = Date.now();
+                const expiry = parseInt(savedExpiry);
+                
+                if (now < expiry) {
+                    console.log('✓ Found valid saved token');
+                    accessToken = savedToken;
+                    gapi.client.setToken({ access_token: savedToken });
+                    onSignIn(true);
+                } else {
+                    console.log('⚠ Saved token expired');
+                    localStorage.removeItem('googleAccessToken');
+                    localStorage.removeItem('googleTokenExpiry');
+                }
+            } else {
+                console.log('No saved token found');
+            }
+        }
+        
+        function saveAuthToken(token) {
+            const rememberMe = document.getElementById('rememberMe').checked;
+            if (rememberMe) {
+                localStorage.setItem('googleAccessToken', token);
+                const expiry = Date.now() + (3600 * 1000);
+                localStorage.setItem('googleTokenExpiry', expiry.toString());
+                console.log('✓ Token saved to localStorage');
+            } else {
+                console.log('⚠ Token not saved ("Stay signed in" unchecked)');
+            }
+        }
+        
+        // =============================================================
+        // Authentication
+        // =============================================================
+        
+        function handleAuthClick() {
+            tokenClient.callback = async (resp) => {
+                if (resp.error !== undefined) {
+                    console.error('Auth error:', resp);
+                    alert('Sign in failed: ' + resp.error);
+                    return;
+                }
+                
+                try {
+                    accessToken = gapi.client.getToken().access_token;
+                    saveAuthToken(accessToken);
+                    console.log('✓ Access token received');
+                    await onSignIn(false);
+                } catch (error) {
+                    console.error('Error after auth:', error);
+                    alert('Error after sign in: ' + error.message);
+                }
+            };
+            
+            try {
+                if (gapi.client.getToken() === null) {
+                    tokenClient.requestAccessToken({prompt: 'consent'});
+                } else {
+                    tokenClient.requestAccessToken({prompt: ''});
+                }
+            } catch (error) {
+                console.error('Error requesting access token:', error);
+                alert('Error during sign in: ' + error.message);
+            }
+        }
+        
+        async function onSignIn(autoSignIn) {
+            try {
+                const response = await gapi.client.request({
+                    path: 'https://www.googleapis.com/oauth2/v1/userinfo',
+                });
+                const userEmail = response.result.email;
+                
+                document.getElementById('authSection').classList.add('hidden');
+                document.getElementById('userInfo').classList.add('show');
+                document.getElementById('userEmail').textContent = userEmail;
+                document.getElementById('mainContent').classList.add('active');
+                
+                if (autoSignIn) {
+                    console.log('✓ Auto-signed in as', userEmail);
+                } else {
+                    console.log('✓ Signed in as', userEmail);
+                }
+            } catch (err) {
+                console.error('Error getting user info:', err);
+                localStorage.removeItem('googleAccessToken');
+                localStorage.removeItem('googleTokenExpiry');
+            }
+        }
+        
+        function handleSignoutClick() {
+            const token = gapi.client.getToken();
+            if (token !== null) {
+                google.accounts.oauth2.revoke(token.access_token);
+                gapi.client.setToken('');
+            }
+            
+            localStorage.removeItem('googleAccessToken');
+            localStorage.removeItem('googleTokenExpiry');
+            
+            document.getElementById('authSection').classList.remove('hidden');
+            document.getElementById('userInfo').classList.remove('show');
+            document.getElementById('mainContent').classList.remove('active');
+            
+            selectedFolders = [];
+            filesToUpload = [];
+            accessToken = null;
+            isStarredView = false;
+            renderFolders();
+            renderFiles();
+            updateStarredButton();
+            
+            console.log('✓ Signed out');
+        }
+        
+        // =============================================================
+        // Subfolders
+        // =============================================================
+
+        async function toggleSubfolders(folderId, event) {
+            event.stopPropagation();
+            
+            console.log('Toggle subfolders for:', folderId);
+            const isExpanded = expandedFolders[folderId];
+            
+            if (isExpanded) {
+                // Collapse
+                console.log('Collapsing folder:', folderId);
+                delete expandedFolders[folderId];
+                renderFolders();
+            } else {
+                // Expand - fetch subfolders
+                console.log('Expanding folder, fetching subfolders...');
+                const btn = event.currentTarget;
+                btn.classList.add('loading');
+                btn.disabled = true;
+                
+                try {
+                    const response = await gapi.client.drive.files.list({
+                        q: `'${folderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+                        fields: 'files(id, name)',
+                        orderBy: 'name',
+                        pageSize: 100
+                    });
+                    
+                    const subfolders = response.result.files || [];
+                    console.log(`✓ Loaded ${subfolders.length} subfolders:`, subfolders.map(f => f.name));
+                    
+                    if (subfolders.length === 0) {
+                        alert('This folder has no subfolders.');
+                        btn.classList.remove('loading');
+                        btn.disabled = false;
+                        return;
+                    }
+                    
+                    expandedFolders[folderId] = subfolders;
+                    renderFolders();
+                } catch (error) {
+                    console.error('Error fetching subfolders:', error);
+                    alert('Error loading subfolders: ' + error.message);
+                    btn.classList.remove('loading');
+                    btn.disabled = false;
+                }
+            }
+        }
+
+        function addSubfolder(parentId, subfolder, event) {
+            event.stopPropagation();
+            
+            // Check if already added
+            if (selectedFolders.find(f => f.id === subfolder.id)) {
+                alert('This folder is already added');
+                return;
+            }
+            
+            const parent = selectedFolders.find(f => f.id === parentId);
+            const folderData = {
+                id: subfolder.id,
+                name: subfolder.name,
+                path: parent ? `${parent.name}/` : 'My Drive/',
+                isSubfolder: true,
+                parentId: parentId
+            };
+            
+            selectedFolders.push(folderData);
+            console.log('Added subfolder:', subfolder.name);
+            
+            // Exit starred view when adding new folders
+            exitStarredView();
+            
+            renderFolders();
+        }
+        
+        // =============================================================
+        // Folder Selection
+        // =============================================================
+        
+        function selectFolder() {
+            const docsView = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
+                .setIncludeFolders(true)
+                .setSelectFolderEnabled(true);
+            
+            const picker = new google.picker.PickerBuilder()
+                .addView(docsView)
+                .setOAuthToken(accessToken)
+                .setDeveloperKey(API_KEY)
+                .setCallback(pickerCallback)
+                .enableFeature(google.picker.Feature.NAV_HIDDEN)
+                .build();
+            picker.setVisible(true);
+        }
+        
+        function pickerCallback(data) {
+            if (data.action === google.picker.Action.PICKED) {
+                const folder = data.docs[0];
+                addFolder(folder);
+            }
+        }
+        
+        function addFolder(folder) {
+            if (selectedFolders.find(f => f.id === folder.id)) {
+                alert('This folder is already added');
+                return;
+            }
+            
+            const folderData = {
+                id: folder.id,
+                name: folder.name,
+                path: 'My Drive'
+            };
+            
+            selectedFolders.push(folderData);
+            
+            if (isStarred(folder.id)) {
+                starredFoldersData[folder.id] = folderData;
+                saveStarredFolders();
+            }
+            
+            // Exit starred view when adding new folders
+            exitStarredView();
+            
+            renderFolders();
+        }
+        
+        function removeFolder(folderId) {
+            selectedFolders = selectedFolders.filter(f => f.id !== folderId);
+            filesToUpload = filesToUpload.filter(f => f.folderId !== folderId);
+            delete expandedFolders[folderId];
+            renderFolders();
+            renderFiles();
+        }
+        
+        function renderFolders() {
+            const container = document.getElementById('foldersList');
+            
+            if (selectedFolders.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📂</div>
+                        <h3>No folders selected</h3>
+                        <p>Click "Add Folder" to choose upload destinations</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = '';
+            
+            for (const folder of selectedFolders) {
+                // Skip subfolders that were added (they'll be rendered separately)
+                if (folder.isSubfolder) continue;
+                
+                const isExpanded = expandedFolders[folder.id] !== undefined;
+                const subfolders = expandedFolders[folder.id] || [];
+                
+                html += `
+                    <div class="folder-item" onclick="selectFolderForFiles('${folder.id}')"
+                         ondragover="handleFolderDragOver(event, '${folder.id}')"
+                         ondragleave="handleFolderDragLeave(event)"
+                         ondrop="handleFolderDrop(event, '${folder.id}', '${folder.name}')">
+                        <div class="folder-info">
+                            <button class="expand-btn ${isExpanded ? 'expanded' : ''}" 
+                                    onclick="toggleSubfolders('${folder.id}', event)"
+                                    title="Show subfolders">
+                                ▶
+                            </button>
+                            <button class="star-btn" onclick="event.stopPropagation(); toggleStar('${folder.id}')" 
+                                    title="${isStarred(folder.id) ? 'Unstar folder' : 'Star folder'}">
+                                ${isStarred(folder.id) ? '⭐' : '☆'}
+                            </button>
+                            <div class="folder-icon">📁</div>
+                            <div>
+                                <div class="folder-name">${folder.name}</div>
+                                <div class="folder-path">${folder.path}</div>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <a href="https://drive.google.com/drive/folders/${folder.id}" target="_blank" 
+                               class="open-folder-btn" onclick="event.stopPropagation()" title="Open in Google Drive">
+                                🔗
+                            </a>
+                            <button class="remove-folder-btn" onclick="event.stopPropagation(); removeFolder('${folder.id}')">Remove</button>
+                        </div>
+                    </div>
+                `;
+                
+                // Render subfolders if expanded (recursively)
+                if (isExpanded && Array.isArray(subfolders) && subfolders.length > 0) {
+                    console.log('Rendering', subfolders.length, 'subfolders for', folder.name);
+                    html += renderSubfoldersRecursive(subfolders, folder.id, folder.name, 1);
+                }
+            }
+            
+            // Now add actual subfolder items that were added to the selection
+            for (const folder of selectedFolders) {
+                if (folder.isSubfolder) {
+                    html += `
+                        <div class="folder-item subfolder" onclick="selectFolderForFiles('${folder.id}')"
+                             ondragover="handleFolderDragOver(event, '${folder.id}')"
+                             ondragleave="handleFolderDragLeave(event)"
+                             ondrop="handleFolderDrop(event, '${folder.id}', '${folder.name}')">
+                            <div class="folder-info">
+                                <span style="width: 26px;"></span>
+                                <button class="star-btn" onclick="event.stopPropagation(); toggleStar('${folder.id}')" 
+                                        title="${isStarred(folder.id) ? 'Unstar folder' : 'Star folder'}">
+                                    ${isStarred(folder.id) ? '⭐' : '☆'}
+                                </button>
+                                <div class="folder-icon">📁</div>
+                                <div>
+                                    <div class="folder-name">${folder.name}</div>
+                                    <div class="folder-path">${folder.path}</div>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <a href="https://drive.google.com/drive/folders/${folder.id}" target="_blank" 
+                                   class="open-folder-btn" onclick="event.stopPropagation()" title="Open in Google Drive">
+                                    🔗
+                                </a>
+                                <button class="remove-folder-btn" onclick="event.stopPropagation(); removeFolder('${folder.id}')">Remove</button>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+            
+            container.innerHTML = html;
+        }
+        
+        function renderSubfoldersRecursive(subfolders, parentId, parentPath, level) {
+            let html = '';
+            const levelClass = `level-${level}`;
+            
+            for (const subfolder of subfolders) {
+                // Check if this subfolder is already added as a full folder
+                const alreadyAdded = selectedFolders.find(f => f.id === subfolder.id);
+                
+                // Check if this subfolder is expanded
+                const isExpanded = expandedFolders[subfolder.id] !== undefined;
+                const nestedSubfolders = expandedFolders[subfolder.id] || [];
+                
+                html += `
+                    <div class="folder-item subfolder ${levelClass}" onclick="selectFolderForFiles('${subfolder.id}')"
+                         ondragover="handleFolderDragOver(event, '${subfolder.id}')"
+                         ondragleave="handleFolderDragLeave(event)"
+                         ondrop="handleFolderDrop(event, '${subfolder.id}', '${subfolder.name}')">
+                        <div class="folder-info">
+                            <button class="expand-btn ${isExpanded ? 'expanded' : ''}" 
+                                    onclick="toggleSubfolders('${subfolder.id}', event)"
+                                    title="Show subfolders">
+                                ▶
+                            </button>
+                            <div class="folder-icon">📁</div>
+                            <div>
+                                <div class="folder-name">${subfolder.name}</div>
+                                <div class="folder-path">${parentPath}/</div>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            ${alreadyAdded ? `
+                                <span style="color: #28a745; font-size: 13px; font-weight: 600;">Added ✓</span>
+                            ` : `
+                                <button class="btn" style="padding: 4px 12px; font-size: 13px;" 
+                                        onclick="addSubfolder('${parentId}', ${JSON.stringify(subfolder).replace(/"/g, '&quot;')}, event)">
+                                    Add
+                                </button>
+                            `}
+                        </div>
+                    </div>
+                `;
+                
+                // Recursively render nested subfolders if this folder is expanded
+                if (isExpanded && Array.isArray(nestedSubfolders) && nestedSubfolders.length > 0) {
+                    console.log(`Rendering ${nestedSubfolders.length} nested subfolders for ${subfolder.name} at level ${level + 1}`);
+                    html += renderSubfoldersRecursive(nestedSubfolders, subfolder.id, `${parentPath}/${subfolder.name}`, level + 1);
+                }
+            }
+            
+            return html;
+        }
+        
+        // =============================================================
+        // File Handling
+        // =============================================================
+        
+        let currentFolderId = null;
+        
+        function selectFolderForFiles(folderId) {
+            currentFolderId = folderId;
+            document.querySelectorAll('.folder-item').forEach(item => item.classList.remove('selected'));
+            event.currentTarget.classList.add('selected');
+        }
+        
+        function handleDragOver(event) {
+            event.preventDefault();
+            document.getElementById('uploadArea').classList.add('drag-over');
+        }
+        
+        function handleDragLeave(event) {
+            document.getElementById('uploadArea').classList.remove('drag-over');
+        }
+        
+        function handleDrop(event) {
+            event.preventDefault();
+            document.getElementById('uploadArea').classList.remove('drag-over');
+            
+            if (!currentFolderId) {
+                alert('Please select a folder first by clicking on it');
+                return;
+            }
+            
+            const files = Array.from(event.dataTransfer.files).filter(f => 
+                f.name.toLowerCase().endsWith('.csv')
+            );
+            
+            if (files.length === 0) {
+                alert('Please drop only CSV files');
+                return;
+            }
+            
+            addFiles(files, currentFolderId);
+        }
+        
+        // Folder-specific drag and drop handlers
+        function handleFolderDragOver(event, folderId) {
+            event.preventDefault();
+            event.stopPropagation();
+            event.currentTarget.classList.add('drag-over-folder');
+        }
+        
+        function handleFolderDragLeave(event) {
+            event.stopPropagation();
+            event.currentTarget.classList.remove('drag-over-folder');
+        }
+        
+        function handleFolderDrop(event, folderId, folderName) {
+            event.preventDefault();
+            event.stopPropagation();
+            event.currentTarget.classList.remove('drag-over-folder');
+            
+            const files = Array.from(event.dataTransfer.files).filter(f => 
+                f.name.toLowerCase().endsWith('.csv')
+            );
+            
+            if (files.length === 0) {
+                alert('Please drop only CSV files');
+                return;
+            }
+            
+            // Find the full folder object to get the correct name
+            const folder = selectedFolders.find(f => f.id === folderId);
+            const finalFolderName = folder ? folder.name : folderName;
+            
+            addFiles(files, folderId, finalFolderName);
+            
+            // Visual feedback
+            const folderElement = event.currentTarget;
+            folderElement.style.background = '#c8e6c9';
+            setTimeout(() => {
+                folderElement.style.background = '';
+            }, 500);
+        }
+        
+        function selectFiles() {
+            if (!currentFolderId) {
+                alert('Please select a folder first by clicking on it');
+                return;
+            }
+            document.getElementById('fileInput').click();
+        }
+        
+        function handleFileSelect(event) {
+            const files = Array.from(event.target.files);
+            addFiles(files, currentFolderId);
+            event.target.value = '';
+        }
+        
+        function addFiles(files, folderId, folderName) {
+            const folder = selectedFolders.find(f => f.id === folderId);
+            const finalFolderName = folderName || (folder ? folder.name : 'Unknown Folder');
+            
+            files.forEach(file => {
+                filesToUpload.push({
+                    file: file,
+                    folderId: folderId,
+                    folderName: finalFolderName
+                });
+            });
+            
+            renderFiles();
+        }
+        
+        function removeFile(index) {
+            filesToUpload.splice(index, 1);
+            renderFiles();
+        }
+        
+        function renderFiles() {
+            const uploadArea = document.getElementById('uploadArea');
+            const fileCount = document.getElementById('fileCount');
+            const uploadBtn = document.getElementById('uploadBtn');
+            
+            fileCount.textContent = filesToUpload.length;
+            uploadBtn.disabled = filesToUpload.length === 0;
+            
+            if (filesToUpload.length === 0) {
+                uploadArea.classList.remove('has-files');
+                uploadArea.innerHTML = `
+                    <div class="upload-icon">⬇️</div>
+                    <div class="upload-text">Drag and drop CSV files here</div>
+                    <div class="upload-hint">or click to browse (select a folder first)</div>
+                `;
+                return;
+            }
+            
+            uploadArea.classList.add('has-files');
+            uploadArea.innerHTML = `
+                <div class="files-list">
+                    ${filesToUpload.map((item, index) => `
+                        <div class="file-item">
+                            <div class="file-info">
+                                <span>📄</span>
+                                <div style="flex: 1;">
+                                    <div class="file-name">${item.file.name}</div>
+                                    <div class="file-size">${formatFileSize(item.file.size)}</div>
+                                </div>
+                                <div class="file-folder-name">→ ${item.folderName}</div>
+                            </div>
+                            <button class="remove-file-btn" onclick="removeFile(${index})">×</button>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+        
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+        
+        // =============================================================
+        // Upload
+        // =============================================================
+        
+        async function uploadFiles() {
+            if (filesToUpload.length === 0) return;
+            
+            document.getElementById('progressSection').classList.add('active');
+            document.getElementById('results').innerHTML = '';
+            document.getElementById('uploadBtn').disabled = true;
+            
+            let completed = 0;
+            const total = filesToUpload.length;
+            
+            for (const item of filesToUpload) {
+                try {
+                    await uploadSingleFile(item.file, item.folderId);
+                    displayResult(true, item.file.name, item.folderName);
+                } catch (error) {
+                    displayResult(false, item.file.name, item.folderName, error.message);
+                }
+                
+                completed++;
+                updateProgress(completed, total);
+            }
+            
+            filesToUpload = [];
+            renderFiles();
+            document.getElementById('uploadBtn').disabled = false;
+        }
+        
+        async function uploadSingleFile(file, folderId) {
+            const metadata = {
+                name: file.name,
+                parents: [folderId]
+            };
+            
+            const form = new FormData();
+            form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+            form.append('file', file);
+            
+            const response = await fetch(
+                'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+                {
+                    method: 'POST',
+                    headers: new Headers({ 'Authorization': 'Bearer ' + accessToken }),
+                    body: form
+                }
+            );
+            
+            if (!response.ok) {
+                throw new Error('Upload failed');
+            }
+            
+            return await response.json();
+        }
+        
+        function updateProgress(completed, total) {
+            const percent = (completed / total) * 100;
+            document.getElementById('progressFill').style.width = percent + '%';
+            document.getElementById('progressText').textContent = 
+                `Uploading... ${completed} of ${total} files (${Math.round(percent)}%)`;
+        }
+        
+        function displayResult(success, fileName, folderName, error = '') {
+            const resultsDiv = document.getElementById('results');
+            const resultItem = document.createElement('div');
+            resultItem.className = `result-item ${success ? 'success' : 'error'}`;
+            
+            if (success) {
+                resultItem.textContent = `✓ ${fileName} → ${folderName}`;
+            } else {
+                resultItem.textContent = `✗ ${fileName}: ${error}`;
+            }
+            
+            resultsDiv.appendChild(resultItem);
+            resultsDiv.scrollTop = resultsDiv.scrollHeight;
+        }
+        
+        // =============================================================
+        // Utility
+        // =============================================================
+        
+        function clearAll() {
+            if (confirm('Clear all folders and files?')) {
+                selectedFolders = [];
+                filesToUpload = [];
+                expandedFolders = {};
+                exitStarredView();
+                renderFolders();
+                renderFiles();
+            }
+        }
+    </script>
+</body>
+</html>
