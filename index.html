@@ -765,11 +765,21 @@
                 if (!folder) continue;
                 
                 const alreadySelected = selectedFolders.find(f => f.id === folderId);
+                const isExpanded = expandedFolders[folderId] !== undefined;
+                const subfolders = expandedFolders[folderId] || [];
                 
                 html += `
                     <div class="folder-item" style="margin-bottom: 10px;">
                         <div class="folder-info">
-                            <span style="width: 26px; text-align: center;">⭐</span>
+                            <button class="expand-btn ${isExpanded ? 'expanded' : ''}" 
+                                    onclick="toggleSubfolders('${folderId}', event)"
+                                    title="Show subfolders">
+                                ▶
+                            </button>
+                            <button class="star-btn" onclick="event.stopPropagation(); toggleStarFromStarredView('${folderId}')" 
+                                    title="Unstar folder" style="font-size: 24px;">
+                                ⭐
+                            </button>
                             <div class="folder-icon">📁</div>
                             <div>
                                 <div class="folder-name">${folder.name}</div>
@@ -786,19 +796,77 @@
                                 </button>
                             `}
                             <a href="https://drive.google.com/drive/folders/${folder.id}" target="_blank" 
-                               class="open-folder-btn" title="Open in Google Drive">
+                               class="open-folder-btn" onclick="event.stopPropagation()" title="Open in Google Drive">
                                 🔗
                             </a>
-                            <button class="star-btn" onclick="toggleStar('${folder.id}')" 
-                                    title="Unstar folder" style="font-size: 20px;">
-                                ⭐
-                            </button>
                         </div>
                     </div>
                 `;
+                
+                // Render subfolders if expanded
+                if (isExpanded && Array.isArray(subfolders) && subfolders.length > 0) {
+                    html += renderSubfoldersForStarred(subfolders, folderId, folder.name, 1);
+                }
             }
             
             container.innerHTML = html;
+        }
+        
+        function renderSubfoldersForStarred(subfolders, parentId, parentPath, level) {
+            let html = '';
+            const levelClass = `level-${level}`;
+            
+            for (const subfolder of subfolders) {
+                const alreadySelected = selectedFolders.find(f => f.id === subfolder.id);
+                const isExpanded = expandedFolders[subfolder.id] !== undefined;
+                const nestedSubfolders = expandedFolders[subfolder.id] || [];
+                
+                html += `
+                    <div class="folder-item subfolder ${levelClass}" style="margin-bottom: 8px;">
+                        <div class="folder-info">
+                            <button class="expand-btn ${isExpanded ? 'expanded' : ''}" 
+                                    onclick="toggleSubfolders('${subfolder.id}', event)"
+                                    title="Show subfolders">
+                                ▶
+                            </button>
+                            <div class="folder-icon">📁</div>
+                            <div>
+                                <div class="folder-name">${subfolder.name}</div>
+                                <div class="folder-path">${parentPath}/</div>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            ${alreadySelected ? `
+                                <span style="color: #28a745; font-size: 13px; font-weight: 600;">Selected ✓</span>
+                            ` : `
+                                <button class="btn" style="padding: 4px 12px; font-size: 13px;" 
+                                        onclick="addSubfolderFromStarred('${parentId}', ${JSON.stringify(subfolder).replace(/"/g, '&quot;')}, event)">
+                                    Add to Selected
+                                </button>
+                            `}
+                        </div>
+                    </div>
+                `;
+                
+                // Recursively render nested subfolders
+                if (isExpanded && Array.isArray(nestedSubfolders) && nestedSubfolders.length > 0) {
+                    html += renderSubfoldersForStarred(nestedSubfolders, subfolder.id, `${parentPath}/${subfolder.name}`, level + 1);
+                }
+            }
+            
+            return html;
+        }
+        
+        function toggleStarFromStarredView(folderId) {
+            if (confirm('Remove this folder from starred?')) {
+                toggleStar(folderId);
+            }
+        }
+        
+        function addSubfolderFromStarred(parentId, subfolder, event) {
+            event.stopPropagation();
+            addSubfolder(parentId, subfolder, event);
+            renderStarredFolders(); // Refresh starred view
         }
         
         function addFromStarred(folderId) {
