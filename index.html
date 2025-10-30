@@ -527,6 +527,16 @@
         .empty-state p {
             font-size: 14px;
         }
+        
+        .section-header {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 15px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
     </style>
 </head>
 <body>
@@ -570,11 +580,21 @@
                 </button>
             </div>
             
-            <div class="folders-list" id="foldersList">
-                <div class="empty-state">
-                    <div class="empty-state-icon">📂</div>
-                    <h3>No folders selected</h3>
-                    <p>Click "Add Folder" to choose upload destinations</p>
+            <!-- Starred Folders Section -->
+            <div id="starredSection" style="display: none; margin-bottom: 30px;">
+                <h3 class="section-header">⭐ Starred Folders</h3>
+                <div id="starredFoldersList"></div>
+            </div>
+            
+            <!-- Selected Folders Section -->
+            <div style="margin-bottom: 30px;">
+                <h3 class="section-header">📁 Selected Folders for Upload</h3>
+                <div class="folders-list" id="foldersList">
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📂</div>
+                        <h3>No folders selected</h3>
+                        <p>Click "Add Folder" or add from starred to choose upload destinations</p>
+                    </div>
                 </div>
             </div>
             
@@ -692,6 +712,11 @@
             saveStarredFolders();
             renderFolders();
             updateStarredCount();
+            
+            // Update starred view if visible
+            if (isStarredView) {
+                renderStarredFolders();
+            }
         }
         
         function isStarred(folderId) {
@@ -705,42 +730,94 @@
         }
         
         function showStarredFolders() {
-            console.log('Show starred clicked. Starred count:', starredFolderIds.length);
+            const section = document.getElementById('starredSection');
+            const isVisible = section.style.display !== 'none';
             
-            // If already in starred view, toggle back to normal view
-            if (isStarredView) {
-                console.log('Exiting starred view');
-                selectedFolders = [];
-                exitStarredView();
-                renderFolders();
-                return;
+            if (isVisible) {
+                // Hide starred section
+                section.style.display = 'none';
+                isStarredView = false;
+                updateStarredButton();
+            } else {
+                // Show starred section
+                if (starredFolderIds.length === 0) {
+                    alert('No starred folders yet!\n\n1. Add a folder\n2. Click the ☆ to star it\n3. Then use this button to view all starred folders');
+                    return;
+                }
+                section.style.display = 'block';
+                isStarredView = true;
+                updateStarredButton();
+                renderStarredFolders();
             }
+        }
+        
+        function renderStarredFolders() {
+            const container = document.getElementById('starredFoldersList');
             
             if (starredFolderIds.length === 0) {
-                alert('No starred folders yet!\n\n1. Add a folder\n2. Click the ☆ to star it\n3. Then use this button to load all starred folders');
+                container.innerHTML = '<p style="color: #666; text-align: center; padding: 20px;">No starred folders</p>';
                 return;
             }
             
-            // Set starred view mode
-            isStarredView = true;
-            updateStarredButton();
-            
-            // Clear current selection
-            selectedFolders = [];
-            
-            // Load from saved data
-            let loaded = 0;
+            let html = '';
             for (const folderId of starredFolderIds) {
-                if (starredFoldersData[folderId]) {
-                    selectedFolders.push(starredFoldersData[folderId]);
-                    loaded++;
-                } else {
-                    console.warn('Missing data for starred folder:', folderId);
-                }
+                const folder = starredFoldersData[folderId];
+                if (!folder) continue;
+                
+                const alreadySelected = selectedFolders.find(f => f.id === folderId);
+                
+                html += `
+                    <div class="folder-item" style="margin-bottom: 10px;">
+                        <div class="folder-info">
+                            <span style="width: 26px; text-align: center;">⭐</span>
+                            <div class="folder-icon">📁</div>
+                            <div>
+                                <div class="folder-name">${folder.name}</div>
+                                <div class="folder-path">${folder.path}</div>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            ${alreadySelected ? `
+                                <span style="color: #28a745; font-size: 13px; font-weight: 600;">Selected ✓</span>
+                            ` : `
+                                <button class="btn" style="padding: 6px 16px; font-size: 13px;" 
+                                        onclick="addFromStarred('${folderId}')">
+                                    Add to Selected
+                                </button>
+                            `}
+                            <a href="https://drive.google.com/drive/folders/${folder.id}" target="_blank" 
+                               class="open-folder-btn" title="Open in Google Drive">
+                                🔗
+                            </a>
+                            <button class="star-btn" onclick="toggleStar('${folder.id}')" 
+                                    title="Unstar folder" style="font-size: 20px;">
+                                ⭐
+                            </button>
+                        </div>
+                    </div>
+                `;
             }
             
-            console.log('Loaded', loaded, 'starred folders');
+            container.innerHTML = html;
+        }
+        
+        function addFromStarred(folderId) {
+            const folder = starredFoldersData[folderId];
+            if (!folder) return;
+            
+            if (selectedFolders.find(f => f.id === folderId)) {
+                alert('This folder is already selected');
+                return;
+            }
+            
+            selectedFolders.push({
+                id: folder.id,
+                name: folder.name,
+                path: folder.path
+            });
+            
             renderFolders();
+            renderStarredFolders(); // Update the starred view
         }
 
         function updateStarredButton() {
@@ -754,6 +831,7 @@
 
         function exitStarredView() {
             isStarredView = false;
+            document.getElementById('starredSection').style.display = 'none';
             updateStarredButton();
         }
         
@@ -921,6 +999,7 @@
             filesToUpload = [];
             accessToken = null;
             isStarredView = false;
+            document.getElementById('starredSection').style.display = 'none';
             renderFolders();
             renderFiles();
             updateStarredButton();
@@ -1000,10 +1079,12 @@
             selectedFolders.push(folderData);
             console.log('Added subfolder:', subfolder.name);
             
-            // Exit starred view when adding new folders
-            exitStarredView();
-            
             renderFolders();
+            
+            // Update starred view if visible
+            if (isStarredView) {
+                renderStarredFolders();
+            }
         }
         
         // =============================================================
@@ -1051,10 +1132,12 @@
                 saveStarredFolders();
             }
             
-            // Exit starred view when adding new folders
-            exitStarredView();
-            
             renderFolders();
+            
+            // Update starred view if visible
+            if (isStarredView) {
+                renderStarredFolders();
+            }
         }
         
         function removeFolder(folderId) {
@@ -1063,6 +1146,11 @@
             delete expandedFolders[folderId];
             renderFolders();
             renderFiles();
+            
+            // Update starred view if visible
+            if (isStarredView) {
+                renderStarredFolders();
+            }
         }
         
         function renderFolders() {
@@ -1457,11 +1545,10 @@
         // =============================================================
         
         function clearAll() {
-            if (confirm('Clear all folders and files?')) {
+            if (confirm('Clear all selected folders and files?')) {
                 selectedFolders = [];
                 filesToUpload = [];
                 expandedFolders = {};
-                exitStarredView();
                 renderFolders();
                 renderFiles();
             }
