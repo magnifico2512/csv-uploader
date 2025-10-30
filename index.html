@@ -707,6 +707,15 @@
         function showStarredFolders() {
             console.log('Show starred clicked. Starred count:', starredFolderIds.length);
             
+            // If already in starred view, toggle back to normal view
+            if (isStarredView) {
+                console.log('Exiting starred view');
+                selectedFolders = [];
+                exitStarredView();
+                renderFolders();
+                return;
+            }
+            
             if (starredFolderIds.length === 0) {
                 alert('No starred folders yet!\n\n1. Add a folder\n2. Click the ☆ to star it\n3. Then use this button to load all starred folders');
                 return;
