@@ -537,6 +537,84 @@
             align-items: center;
             gap: 8px;
         }
+        
+        /* Modal styles */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            width: 90%;
+            max-width: 600px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+        
+        .modal-header {
+            padding: 20px 30px;
+            border-bottom: 1px solid #e8eaed;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-header h2 {
+            margin: 0;
+            font-size: 24px;
+            color: #333;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 32px;
+            color: #666;
+            cursor: pointer;
+            line-height: 1;
+            padding: 0;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.2s;
+        }
+        
+        .modal-close:hover {
+            background: #f1f3f4;
+            color: #333;
+        }
+        
+        .modal-body {
+            padding: 30px;
+        }
+        
+        /* Extraction mode checkbox */
+        .extract-checkbox {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            margin-right: 8px;
+        }
+        
+        .folder-item.extraction-mode {
+            padding-left: 10px;
+        }
+        
+        .extraction-mode-active .folder-item:hover {
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -571,6 +649,12 @@
                 </button>
                 <button class="btn btn-secondary" onclick="showStarredFolders()" id="starredBtn">
                     ⭐ Show Starred (<span id="starredCount">0</span>)
+                </button>
+                <button class="btn btn-secondary" onclick="toggleExtractionMode()" id="extractModeBtn">
+                    🔗 Extract Folder IDs
+                </button>
+                <button class="btn" id="extractBtn" onclick="extractFolderIds()" style="display: none; background: #28a745;">
+                    📋 Copy IDs (<span id="extractCount">0</span>)
                 </button>
                 <button class="btn btn-secondary" onclick="clearAll()">
                     🗑️ Clear All
@@ -620,6 +704,28 @@
         </div>
     </div>
 
+    <!-- Modal for Folder IDs -->
+    <div id="folderIdModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📋 Folder IDs</h2>
+                <button class="modal-close" onclick="closeIdModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom: 15px; color: #666;">Selected <span id="modalCount">0</span> folder(s)</p>
+                <textarea id="folderIdsText" readonly style="width: 100%; height: 300px; font-family: monospace; font-size: 13px; padding: 15px; border: 1px solid #ddd; border-radius: 8px; resize: vertical;"></textarea>
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button class="btn" onclick="copyFolderIds()" style="flex: 1;">
+                        📋 Copy to Clipboard
+                    </button>
+                    <button class="btn btn-secondary" onclick="closeIdModal()" style="flex: 1;">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Google API -->
     <script src="https://apis.google.com/js/api.js"></script>
     <script src="https://accounts.google.com/gsi/client"></script>
@@ -648,6 +754,7 @@
         let starredFoldersData = {};
         let expandedFolders = {}; // Track which folders are expanded
         let isStarredView = false; // NEW: Track if we're viewing starred folders
+        let foldersForIdExtraction = []; // Track folders selected for ID extraction
         
         // =============================================================
         // Initialize
@@ -769,16 +876,23 @@
                 const subfolders = expandedFolders[folderId] || [];
                 
                 html += `
-                    <div class="folder-item" style="margin-bottom: 10px;"
+                    <div class="folder-item ${isExtractionMode ? 'extraction-mode' : ''}" style="margin-bottom: 10px;"
+                         ${isExtractionMode ? `onclick="toggleFolderForExtraction('${folderId}', '${folder.name}', '${folder.path}')"` : ''}
                          ondragover="handleFolderDragOver(event, '${folderId}')"
                          ondragleave="handleFolderDragLeave(event)"
                          ondrop="handleStarredFolderDrop(event, '${folderId}', '${folder.name}')">
                         <div class="folder-info">
-                            <button class="expand-btn ${isExpanded ? 'expanded' : ''}" 
-                                    onclick="toggleSubfolders('${folderId}', event)"
-                                    title="Show subfolders">
-                                ▶
-                            </button>
+                            ${isExtractionMode ? `
+                                <input type="checkbox" class="extract-checkbox" 
+                                       ${isFolderSelectedForExtraction(folderId) ? 'checked' : ''}
+                                       onclick="event.stopPropagation(); toggleFolderForExtraction('${folderId}', '${folder.name}', '${folder.path}')">
+                            ` : `
+                                <button class="expand-btn ${isExpanded ? 'expanded' : ''}" 
+                                        onclick="toggleSubfolders('${folderId}', event)"
+                                        title="Show subfolders">
+                                    ▶
+                                </button>
+                            `}
                             <button class="star-btn" onclick="event.stopPropagation(); toggleStarFromStarredView('${folderId}')" 
                                     title="Unstar folder" style="font-size: 24px;">
                                 ⭐
@@ -790,18 +904,20 @@
                             </div>
                         </div>
                         <div style="display: flex; gap: 8px; align-items: center;">
-                            ${alreadySelected ? `
-                                <span style="color: #28a745; font-size: 13px; font-weight: 600;">Selected ✓</span>
-                            ` : `
-                                <button class="btn" style="padding: 6px 16px; font-size: 13px;" 
-                                        onclick="addFromStarred('${folderId}')">
-                                    Add to Selected
-                                </button>
-                            `}
-                            <a href="https://drive.google.com/drive/folders/${folder.id}" target="_blank" 
-                               class="open-folder-btn" onclick="event.stopPropagation()" title="Open in Google Drive">
-                                🔗
-                            </a>
+                            ${!isExtractionMode ? `
+                                ${alreadySelected ? `
+                                    <span style="color: #28a745; font-size: 13px; font-weight: 600;">Selected ✓</span>
+                                ` : `
+                                    <button class="btn" style="padding: 6px 16px; font-size: 13px;" 
+                                            onclick="addFromStarred('${folderId}')">
+                                        Add to Selected
+                                    </button>
+                                `}
+                                <a href="https://drive.google.com/drive/folders/${folder.id}" target="_blank" 
+                                   class="open-folder-btn" onclick="event.stopPropagation()" title="Open in Google Drive">
+                                    🔗
+                                </a>
+                            ` : ''}
                         </div>
                     </div>
                 `;
@@ -825,16 +941,23 @@
                 const nestedSubfolders = expandedFolders[subfolder.id] || [];
                 
                 html += `
-                    <div class="folder-item subfolder ${levelClass}" style="margin-bottom: 8px;"
+                    <div class="folder-item subfolder ${levelClass} ${isExtractionMode ? 'extraction-mode' : ''}" style="margin-bottom: 8px;"
+                         ${isExtractionMode ? `onclick="toggleFolderForExtraction('${subfolder.id}', '${subfolder.name}', '${parentPath}/')"` : ''}
                          ondragover="handleFolderDragOver(event, '${subfolder.id}')"
                          ondragleave="handleFolderDragLeave(event)"
                          ondrop="handleStarredSubfolderDrop(event, '${parentId}', ${JSON.stringify(subfolder).replace(/"/g, '&quot;')})">
                         <div class="folder-info">
-                            <button class="expand-btn ${isExpanded ? 'expanded' : ''}" 
-                                    onclick="toggleSubfolders('${subfolder.id}', event)"
-                                    title="Show subfolders">
-                                ▶
-                            </button>
+                            ${isExtractionMode ? `
+                                <input type="checkbox" class="extract-checkbox" 
+                                       ${isFolderSelectedForExtraction(subfolder.id) ? 'checked' : ''}
+                                       onclick="event.stopPropagation(); toggleFolderForExtraction('${subfolder.id}', '${subfolder.name}', '${parentPath}/')">
+                            ` : `
+                                <button class="expand-btn ${isExpanded ? 'expanded' : ''}" 
+                                        onclick="toggleSubfolders('${subfolder.id}', event)"
+                                        title="Show subfolders">
+                                    ▶
+                                </button>
+                            `}
                             <div class="folder-icon">📁</div>
                             <div>
                                 <div class="folder-name">${subfolder.name}</div>
@@ -842,14 +965,16 @@
                             </div>
                         </div>
                         <div style="display: flex; gap: 8px; align-items: center;">
-                            ${alreadySelected ? `
-                                <span style="color: #28a745; font-size: 13px; font-weight: 600;">Selected ✓</span>
-                            ` : `
-                                <button class="btn" style="padding: 4px 12px; font-size: 13px;" 
-                                        onclick="addSubfolderFromStarred('${parentId}', ${JSON.stringify(subfolder).replace(/"/g, '&quot;')}, event)">
-                                    Add to Selected
-                                </button>
-                            `}
+                            ${!isExtractionMode ? `
+                                ${alreadySelected ? `
+                                    <span style="color: #28a745; font-size: 13px; font-weight: 600;">Selected ✓</span>
+                                ` : `
+                                    <button class="btn" style="padding: 4px 12px; font-size: 13px;" 
+                                            onclick="addSubfolderFromStarred('${parentId}', ${JSON.stringify(subfolder).replace(/"/g, '&quot;')}, event)">
+                                        Add to Selected
+                                    </button>
+                                `}
+                            ` : ''}
                         </div>
                     </div>
                 `;
@@ -1331,16 +1456,23 @@
                 const subfolders = expandedFolders[folder.id] || [];
                 
                 html += `
-                    <div class="folder-item" onclick="selectFolderForFiles('${folder.id}')"
+                    <div class="folder-item ${isExtractionMode ? 'extraction-mode' : ''}" 
+                         onclick="${isExtractionMode ? `toggleFolderForExtraction('${folder.id}', '${folder.name}', '${folder.path}')` : `selectFolderForFiles('${folder.id}')`}"
                          ondragover="handleFolderDragOver(event, '${folder.id}')"
                          ondragleave="handleFolderDragLeave(event)"
                          ondrop="handleFolderDrop(event, '${folder.id}', '${folder.name}')">
                         <div class="folder-info">
-                            <button class="expand-btn ${isExpanded ? 'expanded' : ''}" 
-                                    onclick="toggleSubfolders('${folder.id}', event)"
-                                    title="Show subfolders">
-                                ▶
-                            </button>
+                            ${isExtractionMode ? `
+                                <input type="checkbox" class="extract-checkbox" 
+                                       ${isFolderSelectedForExtraction(folder.id) ? 'checked' : ''}
+                                       onclick="event.stopPropagation(); toggleFolderForExtraction('${folder.id}', '${folder.name}', '${folder.path}')">
+                            ` : `
+                                <button class="expand-btn ${isExpanded ? 'expanded' : ''}" 
+                                        onclick="toggleSubfolders('${folder.id}', event)"
+                                        title="Show subfolders">
+                                    ▶
+                                </button>
+                            `}
                             <button class="star-btn" onclick="event.stopPropagation(); toggleStar('${folder.id}')" 
                                     title="${isStarred(folder.id) ? 'Unstar folder' : 'Star folder'}">
                                 ${isStarred(folder.id) ? '⭐' : '☆'}
@@ -1352,11 +1484,13 @@
                             </div>
                         </div>
                         <div style="display: flex; gap: 8px; align-items: center;">
-                            <a href="https://drive.google.com/drive/folders/${folder.id}" target="_blank" 
-                               class="open-folder-btn" onclick="event.stopPropagation()" title="Open in Google Drive">
-                                🔗
-                            </a>
-                            <button class="remove-folder-btn" onclick="event.stopPropagation(); removeFolder('${folder.id}')">Remove</button>
+                            ${!isExtractionMode ? `
+                                <a href="https://drive.google.com/drive/folders/${folder.id}" target="_blank" 
+                                   class="open-folder-btn" onclick="event.stopPropagation()" title="Open in Google Drive">
+                                    🔗
+                                </a>
+                                <button class="remove-folder-btn" onclick="event.stopPropagation(); removeFolder('${folder.id}')">Remove</button>
+                            ` : ''}
                         </div>
                     </div>
                 `;
@@ -1372,12 +1506,19 @@
             for (const folder of selectedFolders) {
                 if (folder.isSubfolder) {
                     html += `
-                        <div class="folder-item subfolder" onclick="selectFolderForFiles('${folder.id}')"
+                        <div class="folder-item subfolder ${isExtractionMode ? 'extraction-mode' : ''}" 
+                             onclick="${isExtractionMode ? `toggleFolderForExtraction('${folder.id}', '${folder.name}', '${folder.path}')` : `selectFolderForFiles('${folder.id}')`}"
                              ondragover="handleFolderDragOver(event, '${folder.id}')"
                              ondragleave="handleFolderDragLeave(event)"
                              ondrop="handleFolderDrop(event, '${folder.id}', '${folder.name}')">
                             <div class="folder-info">
-                                <span style="width: 26px;"></span>
+                                ${isExtractionMode ? `
+                                    <input type="checkbox" class="extract-checkbox" 
+                                           ${isFolderSelectedForExtraction(folder.id) ? 'checked' : ''}
+                                           onclick="event.stopPropagation(); toggleFolderForExtraction('${folder.id}', '${folder.name}', '${folder.path}')">
+                                ` : `
+                                    <span style="width: 26px;"></span>
+                                `}
                                 <button class="star-btn" onclick="event.stopPropagation(); toggleStar('${folder.id}')" 
                                         title="${isStarred(folder.id) ? 'Unstar folder' : 'Star folder'}">
                                     ${isStarred(folder.id) ? '⭐' : '☆'}
@@ -1389,11 +1530,13 @@
                                 </div>
                             </div>
                             <div style="display: flex; gap: 8px; align-items: center;">
-                                <a href="https://drive.google.com/drive/folders/${folder.id}" target="_blank" 
-                                   class="open-folder-btn" onclick="event.stopPropagation()" title="Open in Google Drive">
-                                    🔗
-                                </a>
-                                <button class="remove-folder-btn" onclick="event.stopPropagation(); removeFolder('${folder.id}')">Remove</button>
+                                ${!isExtractionMode ? `
+                                    <a href="https://drive.google.com/drive/folders/${folder.id}" target="_blank" 
+                                       class="open-folder-btn" onclick="event.stopPropagation()" title="Open in Google Drive">
+                                        🔗
+                                    </a>
+                                    <button class="remove-folder-btn" onclick="event.stopPropagation(); removeFolder('${folder.id}')">Remove</button>
+                                ` : ''}
                             </div>
                         </div>
                     `;
@@ -1416,16 +1559,23 @@
                 const nestedSubfolders = expandedFolders[subfolder.id] || [];
                 
                 html += `
-                    <div class="folder-item subfolder ${levelClass}" onclick="selectFolderForFiles('${subfolder.id}')"
+                    <div class="folder-item subfolder ${levelClass} ${isExtractionMode ? 'extraction-mode' : ''}" 
+                         onclick="${isExtractionMode ? `toggleFolderForExtraction('${subfolder.id}', '${subfolder.name}', '${parentPath}/')` : `selectFolderForFiles('${subfolder.id}')`}"
                          ondragover="handleFolderDragOver(event, '${subfolder.id}')"
                          ondragleave="handleFolderDragLeave(event)"
                          ondrop="handleFolderDrop(event, '${subfolder.id}', '${subfolder.name}')">
                         <div class="folder-info">
-                            <button class="expand-btn ${isExpanded ? 'expanded' : ''}" 
-                                    onclick="toggleSubfolders('${subfolder.id}', event)"
-                                    title="Show subfolders">
-                                ▶
-                            </button>
+                            ${isExtractionMode ? `
+                                <input type="checkbox" class="extract-checkbox" 
+                                       ${isFolderSelectedForExtraction(subfolder.id) ? 'checked' : ''}
+                                       onclick="event.stopPropagation(); toggleFolderForExtraction('${subfolder.id}', '${subfolder.name}', '${parentPath}/')">
+                            ` : `
+                                <button class="expand-btn ${isExpanded ? 'expanded' : ''}" 
+                                        onclick="toggleSubfolders('${subfolder.id}', event)"
+                                        title="Show subfolders">
+                                    ▶
+                                </button>
+                            `}
                             <div class="folder-icon">📁</div>
                             <div>
                                 <div class="folder-name">${subfolder.name}</div>
@@ -1433,14 +1583,16 @@
                             </div>
                         </div>
                         <div style="display: flex; gap: 8px; align-items: center;">
-                            ${alreadyAdded ? `
-                                <span style="color: #28a745; font-size: 13px; font-weight: 600;">Added ✓</span>
-                            ` : `
-                                <button class="btn" style="padding: 4px 12px; font-size: 13px;" 
-                                        onclick="addSubfolder('${parentId}', ${JSON.stringify(subfolder).replace(/"/g, '&quot;')}, event)">
-                                    Add
-                                </button>
-                            `}
+                            ${!isExtractionMode ? `
+                                ${alreadyAdded ? `
+                                    <span style="color: #28a745; font-size: 13px; font-weight: 600;">Added ✓</span>
+                                ` : `
+                                    <button class="btn" style="padding: 4px 12px; font-size: 13px;" 
+                                            onclick="addSubfolder('${parentId}', ${JSON.stringify(subfolder).replace(/"/g, '&quot;')}, event)">
+                                        Add
+                                    </button>
+                                `}
+                            ` : ''}
                         </div>
                     </div>
                 `;
@@ -1710,6 +1862,117 @@
                 renderFolders();
                 renderFiles();
             }
+        }
+        
+        // =============================================================
+        // Folder ID Extraction
+        // =============================================================
+        
+        let isExtractionMode = false;
+        
+        function toggleExtractionMode() {
+            isExtractionMode = !isExtractionMode;
+            const extractModeBtn = document.getElementById('extractModeBtn');
+            const extractBtn = document.getElementById('extractBtn');
+            
+            if (isExtractionMode) {
+                extractModeBtn.classList.add('active');
+                extractBtn.style.display = 'inline-flex';
+                foldersForIdExtraction = [];
+                updateExtractCount();
+            } else {
+                extractModeBtn.classList.remove('active');
+                extractBtn.style.display = 'none';
+                foldersForIdExtraction = [];
+            }
+            
+            renderFolders();
+            if (isStarredView) {
+                renderStarredFolders();
+            }
+        }
+        
+        function toggleFolderForExtraction(folderId, folderName, folderPath) {
+            const index = foldersForIdExtraction.findIndex(f => f.id === folderId);
+            
+            if (index > -1) {
+                foldersForIdExtraction.splice(index, 1);
+            } else {
+                foldersForIdExtraction.push({
+                    id: folderId,
+                    name: folderName,
+                    path: folderPath
+                });
+            }
+            
+            updateExtractCount();
+            renderFolders();
+            if (isStarredView) {
+                renderStarredFolders();
+            }
+        }
+        
+        function isFolderSelectedForExtraction(folderId) {
+            return foldersForIdExtraction.some(f => f.id === folderId);
+        }
+        
+        function updateExtractCount() {
+            document.getElementById('extractCount').textContent = foldersForIdExtraction.length;
+        }
+        
+        function extractFolderIds() {
+            if (foldersForIdExtraction.length === 0) {
+                alert('Please select folders by clicking on them');
+                return;
+            }
+            
+            // Format the IDs
+            let idsText = '';
+            
+            // Option 1: Just IDs (one per line)
+            idsText += "=== Folder IDs ===\n";
+            foldersForIdExtraction.forEach(folder => {
+                idsText += `${folder.id}\n`;
+            });
+            
+            idsText += "\n=== Folder IDs with Names ===\n";
+            foldersForIdExtraction.forEach(folder => {
+                idsText += `${folder.name}: ${folder.id}\n`;
+            });
+            
+            idsText += "\n=== Folder IDs with Full Path ===\n";
+            foldersForIdExtraction.forEach(folder => {
+                idsText += `${folder.path}/${folder.name}: ${folder.id}\n`;
+            });
+            
+            idsText += "\n=== JSON Format ===\n";
+            idsText += JSON.stringify(foldersForIdExtraction, null, 2);
+            
+            // Show modal
+            document.getElementById('folderIdsText').value = idsText;
+            document.getElementById('modalCount').textContent = foldersForIdExtraction.length;
+            document.getElementById('folderIdModal').style.display = 'flex';
+        }
+        
+        function closeIdModal() {
+            document.getElementById('folderIdModal').style.display = 'none';
+        }
+        
+        function copyFolderIds() {
+            const textarea = document.getElementById('folderIdsText');
+            textarea.select();
+            document.execCommand('copy');
+            
+            // Visual feedback
+            const btn = event.currentTarget;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '✓ Copied!';
+            btn.style.background = '#28a745';
+            
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                btn.style.background = '';
+            }, 2000);
         }
     </script>
 </body>
