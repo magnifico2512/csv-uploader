@@ -605,7 +605,7 @@
                  onclick="selectFiles()">
                 <div class="upload-icon">⬇️</div>
                 <div class="upload-text">Drag and drop CSV files here</div>
-                <div class="upload-hint">or click to browse</div>
+                <div class="upload-hint">or drop directly on any folder, or click to browse</div>
             </div>
             
             <input type="file" id="fileInput" accept=".csv" multiple style="display: none;" onchange="handleFileSelect(event)">
@@ -769,7 +769,10 @@
                 const subfolders = expandedFolders[folderId] || [];
                 
                 html += `
-                    <div class="folder-item" style="margin-bottom: 10px;">
+                    <div class="folder-item" style="margin-bottom: 10px;"
+                         ondragover="handleFolderDragOver(event, '${folderId}')"
+                         ondragleave="handleFolderDragLeave(event)"
+                         ondrop="handleStarredFolderDrop(event, '${folderId}', '${folder.name}')">
                         <div class="folder-info">
                             <button class="expand-btn ${isExpanded ? 'expanded' : ''}" 
                                     onclick="toggleSubfolders('${folderId}', event)"
@@ -822,7 +825,10 @@
                 const nestedSubfolders = expandedFolders[subfolder.id] || [];
                 
                 html += `
-                    <div class="folder-item subfolder ${levelClass}" style="margin-bottom: 8px;">
+                    <div class="folder-item subfolder ${levelClass}" style="margin-bottom: 8px;"
+                         ondragover="handleFolderDragOver(event, '${subfolder.id}')"
+                         ondragleave="handleFolderDragLeave(event)"
+                         ondrop="handleStarredSubfolderDrop(event, '${parentId}', ${JSON.stringify(subfolder).replace(/"/g, '&quot;')})">
                         <div class="folder-info">
                             <button class="expand-btn ${isExpanded ? 'expanded' : ''}" 
                                     onclick="toggleSubfolders('${subfolder.id}', event)"
@@ -867,6 +873,76 @@
             event.stopPropagation();
             addSubfolder(parentId, subfolder, event);
             renderStarredFolders(); // Refresh starred view
+        }
+        
+        function handleStarredFolderDrop(event, folderId, folderName) {
+            event.preventDefault();
+            event.stopPropagation();
+            event.currentTarget.classList.remove('drag-over-folder');
+            
+            const files = Array.from(event.dataTransfer.files).filter(f => 
+                f.name.toLowerCase().endsWith('.csv')
+            );
+            
+            if (files.length === 0) {
+                alert('Please drop only CSV files');
+                return;
+            }
+            
+            // Add folder to selected if not already there
+            if (!selectedFolders.find(f => f.id === folderId)) {
+                addFromStarred(folderId);
+            }
+            
+            // Add files
+            addFiles(files, folderId, folderName);
+            
+            // Visual feedback
+            const folderElement = event.currentTarget;
+            folderElement.style.background = '#c8e6c9';
+            setTimeout(() => {
+                folderElement.style.background = '';
+            }, 500);
+        }
+        
+        function handleStarredSubfolderDrop(event, parentId, subfolder) {
+            event.preventDefault();
+            event.stopPropagation();
+            event.currentTarget.classList.remove('drag-over-folder');
+            
+            const files = Array.from(event.dataTransfer.files).filter(f => 
+                f.name.toLowerCase().endsWith('.csv')
+            );
+            
+            if (files.length === 0) {
+                alert('Please drop only CSV files');
+                return;
+            }
+            
+            // Add subfolder to selected if not already there
+            if (!selectedFolders.find(f => f.id === subfolder.id)) {
+                const parent = selectedFolders.find(f => f.id === parentId);
+                const folderData = {
+                    id: subfolder.id,
+                    name: subfolder.name,
+                    path: parent ? `${parent.name}/` : 'My Drive/',
+                    isSubfolder: true,
+                    parentId: parentId
+                };
+                selectedFolders.push(folderData);
+                renderFolders();
+                renderStarredFolders();
+            }
+            
+            // Add files
+            addFiles(files, subfolder.id, subfolder.name);
+            
+            // Visual feedback
+            const folderElement = event.currentTarget;
+            folderElement.style.background = '#c8e6c9';
+            setTimeout(() => {
+                folderElement.style.background = '';
+            }, 500);
         }
         
         function addFromStarred(folderId) {
@@ -1404,17 +1480,17 @@
             event.preventDefault();
             document.getElementById('uploadArea').classList.remove('drag-over');
             
-            if (!currentFolderId) {
-                alert('Please select a folder first by clicking on it');
-                return;
-            }
-            
             const files = Array.from(event.dataTransfer.files).filter(f => 
                 f.name.toLowerCase().endsWith('.csv')
             );
             
             if (files.length === 0) {
                 alert('Please drop only CSV files');
+                return;
+            }
+            
+            if (!currentFolderId) {
+                alert('Please click on a folder to select it first, or drop files directly on a folder');
                 return;
             }
             
@@ -1462,8 +1538,12 @@
         }
         
         function selectFiles() {
+            if (selectedFolders.length === 0) {
+                alert('Please add or select a folder first, or drag files directly onto a folder');
+                return;
+            }
             if (!currentFolderId) {
-                alert('Please select a folder first by clicking on it');
+                alert('Please click on a folder to select it first');
                 return;
             }
             document.getElementById('fileInput').click();
@@ -1508,7 +1588,7 @@
                 uploadArea.innerHTML = `
                     <div class="upload-icon">⬇️</div>
                     <div class="upload-text">Drag and drop CSV files here</div>
-                    <div class="upload-hint">or click to browse (select a folder first)</div>
+                    <div class="upload-hint">or drop directly on any folder, or click to browse</div>
                 `;
                 return;
             }
