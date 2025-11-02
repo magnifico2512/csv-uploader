@@ -1926,26 +1926,35 @@
                 return;
             }
             
-            // Format the IDs
+            // Format the IDs for Google Sheets (tab-separated)
             let idsText = '';
             
-            // Option 1: Just IDs (one per line)
-            idsText += "=== Folder IDs ===\n";
+            // Tab-separated format for Google Sheets
+            idsText += "=== Format 1: Name + ID (paste into Google Sheets) ===\n";
+            idsText += "Folder Name\tFolder ID\n";
+            foldersForIdExtraction.forEach(folder => {
+                idsText += `${folder.name}\t${folder.id}\n`;
+            });
+            
+            idsText += "\n=== Format 2: Full Path + ID (paste into Google Sheets) ===\n";
+            idsText += "Full Path\tFolder ID\n";
+            foldersForIdExtraction.forEach(folder => {
+                const fullPath = folder.path.endsWith('/') ? `${folder.path}${folder.name}` : `${folder.path}/${folder.name}`;
+                idsText += `${fullPath}\t${folder.id}\n`;
+            });
+            
+            idsText += "\n=== Format 3: Name + Path + ID (paste into Google Sheets) ===\n";
+            idsText += "Folder Name\tPath\tFolder ID\n";
+            foldersForIdExtraction.forEach(folder => {
+                idsText += `${folder.name}\t${folder.path}\t${folder.id}\n`;
+            });
+            
+            idsText += "\n=== Format 4: Just IDs (one per line) ===\n";
             foldersForIdExtraction.forEach(folder => {
                 idsText += `${folder.id}\n`;
             });
             
-            idsText += "\n=== Folder IDs with Names ===\n";
-            foldersForIdExtraction.forEach(folder => {
-                idsText += `${folder.name}: ${folder.id}\n`;
-            });
-            
-            idsText += "\n=== Folder IDs with Full Path ===\n";
-            foldersForIdExtraction.forEach(folder => {
-                idsText += `${folder.path}/${folder.name}: ${folder.id}\n`;
-            });
-            
-            idsText += "\n=== JSON Format ===\n";
+            idsText += "\n=== Format 5: JSON ===\n";
             idsText += JSON.stringify(foldersForIdExtraction, null, 2);
             
             // Show modal
