@@ -956,7 +956,7 @@
                          ${isExtractionMode ? `onclick="toggleFolderForExtraction('${subfolder.id}', '${subfolder.name}', '${parentPath}/')"` : ''}
                          ondragover="handleFolderDragOver(event, '${subfolder.id}')"
                          ondragleave="handleFolderDragLeave(event)"
-                         ondrop="handleStarredSubfolderDrop(event, '${parentId}', ${JSON.stringify(subfolder).replace(/"/g, '&quot;')})">
+                         ondrop="handleStarredSubfolderDrop(event, '${parentId}', ${JSON.stringify(subfolder).replace(/"/g, '&quot;')}, '${parentPath}')">
                         <div class="folder-info">
                             ${isExtractionMode ? `
                                 <input type="checkbox" class="extract-checkbox" 
@@ -981,7 +981,7 @@
                                     <span style="color: #28a745; font-size: 13px; font-weight: 600;">Selected ✓</span>
                                 ` : `
                                     <button class="btn" style="padding: 4px 12px; font-size: 13px;" 
-                                            onclick="addSubfolderFromStarred('${parentId}', ${JSON.stringify(subfolder).replace(/"/g, '&quot;')}, event)">
+                                            onclick="addSubfolderFromStarred('${parentId}', ${JSON.stringify(subfolder).replace(/"/g, '&quot;')}, '${parentPath}/', event)">
                                         Add to Selected
                                     </button>
                                 `}
@@ -992,7 +992,8 @@
                 
                 // Recursively render nested subfolders
                 if (isExpanded && Array.isArray(nestedSubfolders) && nestedSubfolders.length > 0) {
-                    html += renderSubfoldersForStarred(nestedSubfolders, subfolder.id, `${parentPath}/${subfolder.name}`, level + 1);
+                    const nestedParentPath = `${parentPath}/${subfolder.name}`;
+                    html += renderSubfoldersForStarred(nestedSubfolders, subfolder.id, nestedParentPath, level + 1);
                 }
             }
             
@@ -1005,10 +1006,53 @@
             }
         }
         
-        function addSubfolderFromStarred(parentId, subfolder, event) {
+        function addSubfolderFromStarred(parentId, subfolder, parentPath, event) {
             event.stopPropagation();
-            addSubfolder(parentId, subfolder, event);
-            renderStarredFolders(); // Refresh starred view
+            
+            // Check if already added
+            if (selectedFolders.find(f => f.id === subfolder.id)) {
+                alert('This folder is already added');
+                return;
+            }
+            
+            // Construct full path
+            let fullPath;
+            if (parentPath) {
+                // Use the provided parent path
+                fullPath = parentPath.endsWith('/') ? parentPath : parentPath + '/';
+            } else {
+                // Try to find parent in selected folders
+                let parent = selectedFolders.find(f => f.id === parentId);
+                
+                // If not found, check starred folders data
+                if (!parent && starredFoldersData[parentId]) {
+                    parent = starredFoldersData[parentId];
+                }
+                
+                if (parent) {
+                    if (parent.path.endsWith('/')) {
+                        fullPath = `${parent.path}${parent.name}/`;
+                    } else {
+                        fullPath = `${parent.path}/${parent.name}/`;
+                    }
+                } else {
+                    fullPath = 'My Drive/';
+                }
+            }
+            
+            const folderData = {
+                id: subfolder.id,
+                name: subfolder.name,
+                path: fullPath,
+                isSubfolder: true,
+                parentId: parentId
+            };
+            
+            selectedFolders.push(folderData);
+            console.log('Added subfolder from starred:', subfolder.name, 'with path:', fullPath);
+            
+            renderFolders();
+            renderStarredFolders();
         }
         
         function handleStarredFolderDrop(event, folderId, folderName) {
@@ -1044,7 +1088,7 @@
             }, 500);
         }
         
-        function handleStarredSubfolderDrop(event, parentId, subfolder) {
+        function handleStarredSubfolderDrop(event, parentId, subfolder, parentPath) {
             event.preventDefault();
             event.stopPropagation();
             event.currentTarget.classList.remove('drag-over-folder');
@@ -1060,24 +1104,18 @@
             
             // Add subfolder to selected if not already there
             if (!selectedFolders.find(f => f.id === subfolder.id)) {
-                const parent = selectedFolders.find(f => f.id === parentId);
-                
-                // Construct full path including all parent folders
+                // Construct full path
                 let fullPath;
-                if (parent) {
-                    if (parent.path.endsWith('/')) {
-                        fullPath = `${parent.path}${parent.name}/`;
-                    } else {
-                        fullPath = `${parent.path}/${parent.name}/`;
-                    }
+                if (parentPath) {
+                    fullPath = parentPath.endsWith('/') ? parentPath : parentPath + '/';
                 } else {
-                    // Try to get parent from starred data
-                    const starredParent = starredFoldersData[parentId];
-                    if (starredParent) {
-                        if (starredParent.path.endsWith('/')) {
-                            fullPath = `${starredParent.path}${starredParent.name}/`;
+                    const parent = selectedFolders.find(f => f.id === parentId) || starredFoldersData[parentId];
+                    
+                    if (parent) {
+                        if (parent.path.endsWith('/')) {
+                            fullPath = `${parent.path}${parent.name}/`;
                         } else {
-                            fullPath = `${starredParent.path}/${starredParent.name}/`;
+                            fullPath = `${parent.path}/${parent.name}/`;
                         }
                     } else {
                         fullPath = 'My Drive/';
@@ -1383,7 +1421,13 @@
                 return;
             }
             
-            const parent = selectedFolders.find(f => f.id === parentId);
+            // Try to find parent in selected folders first
+            let parent = selectedFolders.find(f => f.id === parentId);
+            
+            // If not found, check starred folders data
+            if (!parent && starredFoldersData[parentId]) {
+                parent = starredFoldersData[parentId];
+            }
             
             // Construct full path including all parent folders
             let fullPath;
@@ -1654,7 +1698,8 @@
                 // Recursively render nested subfolders if this folder is expanded
                 if (isExpanded && Array.isArray(nestedSubfolders) && nestedSubfolders.length > 0) {
                     console.log(`Rendering ${nestedSubfolders.length} nested subfolders for ${subfolder.name} at level ${level + 1}`);
-                    html += renderSubfoldersRecursive(nestedSubfolders, subfolder.id, `${parentPath}/${subfolder.name}`, level + 1);
+                    const nestedParentPath = `${parentPath}/${subfolder.name}`;
+                    html += renderSubfoldersRecursive(nestedSubfolders, subfolder.id, nestedParentPath, level + 1);
                 }
             }
             
