@@ -931,7 +931,11 @@
                 
                 // Render subfolders if expanded
                 if (isExpanded && Array.isArray(subfolders) && subfolders.length > 0) {
-                    html += renderSubfoldersForStarred(subfolders, folderId, folder.name, 1);
+                    // Construct full parent path
+                    const fullParentPath = folder.path.endsWith('/') 
+                        ? `${folder.path}${folder.name}` 
+                        : `${folder.path}/${folder.name}`;
+                    html += renderSubfoldersForStarred(subfolders, folderId, fullParentPath, 1);
                 }
             }
             
@@ -1057,10 +1061,33 @@
             // Add subfolder to selected if not already there
             if (!selectedFolders.find(f => f.id === subfolder.id)) {
                 const parent = selectedFolders.find(f => f.id === parentId);
+                
+                // Construct full path including all parent folders
+                let fullPath;
+                if (parent) {
+                    if (parent.path.endsWith('/')) {
+                        fullPath = `${parent.path}${parent.name}/`;
+                    } else {
+                        fullPath = `${parent.path}/${parent.name}/`;
+                    }
+                } else {
+                    // Try to get parent from starred data
+                    const starredParent = starredFoldersData[parentId];
+                    if (starredParent) {
+                        if (starredParent.path.endsWith('/')) {
+                            fullPath = `${starredParent.path}${starredParent.name}/`;
+                        } else {
+                            fullPath = `${starredParent.path}/${starredParent.name}/`;
+                        }
+                    } else {
+                        fullPath = 'My Drive/';
+                    }
+                }
+                
                 const folderData = {
                     id: subfolder.id,
                     name: subfolder.name,
-                    path: parent ? `${parent.name}/` : 'My Drive/',
+                    path: fullPath,
                     isSubfolder: true,
                     parentId: parentId
                 };
@@ -1357,16 +1384,29 @@
             }
             
             const parent = selectedFolders.find(f => f.id === parentId);
+            
+            // Construct full path including all parent folders
+            let fullPath;
+            if (parent) {
+                if (parent.path.endsWith('/')) {
+                    fullPath = `${parent.path}${parent.name}/`;
+                } else {
+                    fullPath = `${parent.path}/${parent.name}/`;
+                }
+            } else {
+                fullPath = 'My Drive/';
+            }
+            
             const folderData = {
                 id: subfolder.id,
                 name: subfolder.name,
-                path: parent ? `${parent.name}/` : 'My Drive/',
+                path: fullPath,
                 isSubfolder: true,
                 parentId: parentId
             };
             
             selectedFolders.push(folderData);
-            console.log('Added subfolder:', subfolder.name);
+            console.log('Added subfolder:', subfolder.name, 'with path:', fullPath);
             
             renderFolders();
             
@@ -1508,7 +1548,11 @@
                 // Render subfolders if expanded (recursively)
                 if (isExpanded && Array.isArray(subfolders) && subfolders.length > 0) {
                     console.log('Rendering', subfolders.length, 'subfolders for', folder.name);
-                    html += renderSubfoldersRecursive(subfolders, folder.id, folder.name, 1);
+                    // Construct full parent path
+                    const fullParentPath = folder.path.endsWith('/') 
+                        ? `${folder.path}${folder.name}` 
+                        : `${folder.path}/${folder.name}`;
+                    html += renderSubfoldersRecursive(subfolders, folder.id, fullParentPath, 1);
                 }
             }
             
