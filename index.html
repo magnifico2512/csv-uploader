@@ -132,6 +132,7 @@
             gap: 15px;
             margin-bottom: 30px;
             flex-wrap: wrap;
+            align-items: center;
         }
         
         .btn {
@@ -178,6 +179,30 @@
 
         .btn-secondary.active:hover {
             background: #ffb300;
+        }
+        
+        .split-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-left: auto;
+        }
+        
+        .split-control input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+        
+        .split-control label {
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            color: #333;
+            white-space: nowrap;
         }
         
         .folders-list {
@@ -422,6 +447,13 @@
             color: #666;
         }
         
+        .file-warning {
+            font-size: 12px;
+            color: #ff9800;
+            font-weight: 600;
+            margin-top: 2px;
+        }
+        
         .file-folder-name {
             font-size: 12px;
             color: #667eea;
@@ -512,6 +544,12 @@
             background: #f8d7da;
             color: #721c24;
             border: 1px solid #f5c6cb;
+        }
+
+        .result-item.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
         }
         
         .empty-state {
@@ -666,7 +704,11 @@
                 <button class="btn btn-secondary" onclick="clearAll()">
                     🗑️ Clear All
                 </button>
-                <button class="btn" id="uploadBtn" onclick="uploadFiles()" disabled style="margin-left: auto;">
+                <div class="split-control">
+                    <input type="checkbox" id="splitLargeFiles" checked>
+                    <label for="splitLargeFiles">Split files &gt; 500 MB</label>
+                </div>
+                <button class="btn" id="uploadBtn" onclick="uploadFiles()" disabled>
                     🚀 Upload All Files (<span id="fileCount">0</span>)
                 </button>
             </div>
@@ -745,6 +787,7 @@
         const CLIENT_ID = '135674615981-nfgtkmknauaq8djheo48d7edb8cmker6.apps.googleusercontent.com';
         const API_KEY = 'AIzaSyApT-2ATV8f34WuYg_tYNCmj8rFA4XLe4I';
         const SCOPES = 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/userinfo.email';
+        const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500 MB in bytes
         
         // =============================================================
         // State
@@ -772,6 +815,86 @@
             gapiLoaded();
             gisLoaded();
         });
+        
+        // =============================================================
+        // CSV Splitting Functions
+        // =============================================================
+        
+        async function splitCSVFile(file) {
+            console.log(`Splitting file: ${file.name} (${formatFileSize(file.size)})`);
+            
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                
+                reader.onload = async function(e) {
+                    try {
+                        const text = e.target.result;
+                        const lines = text.split('\n');
+                        
+                        if (lines.length < 2) {
+                            resolve([file]); // Not enough lines to split
+                            return;
+                        }
+                        
+                        const header = lines[0];
+                        const dataLines = lines.slice(1);
+                        
+                        const chunks = [];
+                        let currentChunk = [];
+                        let currentSize = new Blob([header + '\n']).size;
+                        
+                        for (let i = 0; i < dataLines.length; i++) {
+                            const line = dataLines[i];
+                            const lineSize = new Blob([line + '\n']).size;
+                            
+                            // Check if adding this line would exceed max size
+                            if (currentSize + lineSize > MAX_FILE_SIZE && currentChunk.length > 0) {
+                                // Save current chunk
+                                chunks.push(currentChunk);
+                                // Start new chunk
+                                currentChunk = [line];
+                                currentSize = new Blob([header + '\n' + line + '\n']).size;
+                            } else {
+                                currentChunk.push(line);
+                                currentSize += lineSize;
+                            }
+                        }
+                        
+                        // Add the last chunk if it has data
+                        if (currentChunk.length > 0) {
+                            chunks.push(currentChunk);
+                        }
+                        
+                        console.log(`Split into ${chunks.length} chunks`);
+                        
+                        // Create File objects for each chunk
+                        const fileChunks = [];
+                        const baseName = file.name.replace('.csv', '');
+                        
+                        for (let i = 0; i < chunks.length; i++) {
+                            const chunkContent = header + '\n' + chunks[i].join('\n');
+                            const chunkName = `${baseName}_part${i + 1}of${chunks.length}.csv`;
+                            const chunkBlob = new Blob([chunkContent], { type: 'text/csv' });
+                            const chunkFile = new File([chunkBlob], chunkName, { type: 'text/csv' });
+                            
+                            fileChunks.push(chunkFile);
+                            console.log(`Created chunk: ${chunkName} (${formatFileSize(chunkFile.size)})`);
+                        }
+                        
+                        resolve(fileChunks);
+                    } catch (error) {
+                        console.error('Error splitting file:', error);
+                        reject(error);
+                    }
+                };
+                
+                reader.onerror = function() {
+                    reject(new Error('Failed to read file'));
+                };
+                
+                reader.readAsText(file);
+            });
+        }
         
         // =============================================================
         // Starred Folders
@@ -1826,7 +1949,8 @@
                     file: file,
                     folderId: folderId,
                     folderName: finalFolderName,
-                    folderPath: fullPath
+                    folderPath: fullPath,
+                    needsSplitting: file.size > MAX_FILE_SIZE
                 });
             });
             
@@ -1856,16 +1980,23 @@
                 return;
             }
             
+            const splitEnabled = document.getElementById('splitLargeFiles').checked;
+            
             uploadArea.classList.add('has-files');
             uploadArea.innerHTML = `
                 <div class="files-list">
-                    ${filesToUpload.map((item, index) => `
+                    ${filesToUpload.map((item, index) => {
+                        const willBeSplit = splitEnabled && item.needsSplitting;
+                        const estimatedParts = willBeSplit ? Math.ceil(item.file.size / MAX_FILE_SIZE) : 1;
+                        
+                        return `
                         <div class="file-item">
                             <div class="file-info">
                                 <span>📄</span>
                                 <div style="flex: 1; min-width: 0;">
                                     <div class="file-name">${item.file.name}</div>
                                     <div class="file-size">${formatFileSize(item.file.size)}</div>
+                                    ${willBeSplit ? `<div class="file-warning">⚠ Will be split into ~${estimatedParts} parts</div>` : ''}
                                 </div>
                             </div>
                             <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
@@ -1873,7 +2004,7 @@
                                 <button class="remove-file-btn" onclick="removeFile(${index})">×</button>
                             </div>
                         </div>
-                    `).join('')}
+                    `}).join('')}
                 </div>
             `;
         }
@@ -1891,14 +2022,51 @@
         async function uploadFiles() {
             if (filesToUpload.length === 0) return;
             
+            const splitEnabled = document.getElementById('splitLargeFiles').checked;
+            
             document.getElementById('progressSection').classList.add('active');
             document.getElementById('results').innerHTML = '';
             document.getElementById('uploadBtn').disabled = true;
             
-            let completed = 0;
-            const total = filesToUpload.length;
+            // First, process files that need splitting
+            let processedFiles = [];
             
             for (const item of filesToUpload) {
+                if (splitEnabled && item.needsSplitting) {
+                    try {
+                        displayResult(false, '', '', `Splitting ${item.file.name}...`, 'info');
+                        const chunks = await splitCSVFile(item.file);
+                        
+                        // Add each chunk as a separate upload task
+                        for (const chunk of chunks) {
+                            processedFiles.push({
+                                file: chunk,
+                                folderId: item.folderId,
+                                folderName: item.folderName,
+                                folderPath: item.folderPath,
+                                originalName: item.file.name,
+                                isSplitPart: true
+                            });
+                        }
+                        
+                        displayResult(true, item.file.name, item.folderPath || item.folderName, 
+                            `Split into ${chunks.length} parts`, 'info');
+                    } catch (error) {
+                        displayResult(false, item.file.name, item.folderPath || item.folderName, 
+                            'Failed to split: ' + error.message);
+                        // Still add the original file if splitting fails
+                        processedFiles.push(item);
+                    }
+                } else {
+                    processedFiles.push(item);
+                }
+            }
+            
+            // Now upload all files (original and split)
+            let completed = 0;
+            const total = processedFiles.length;
+            
+            for (const item of processedFiles) {
                 try {
                     await uploadSingleFile(item.file, item.folderId);
                     displayResult(true, item.file.name, item.folderPath || item.folderName);
@@ -1948,14 +2116,18 @@
                 `Uploading... ${completed} of ${total} files (${Math.round(percent)}%)`;
         }
         
-        function displayResult(success, fileName, folderName, error = '') {
+        function displayResult(success, fileName, folderName, error = '', type = null) {
             const resultsDiv = document.getElementById('results');
             const resultItem = document.createElement('div');
-            resultItem.className = `result-item ${success ? 'success' : 'error'}`;
             
-            if (success) {
+            if (type === 'info') {
+                resultItem.className = 'result-item info';
+                resultItem.textContent = `ℹ ${error}`;
+            } else if (success) {
+                resultItem.className = 'result-item success';
                 resultItem.textContent = `✓ ${fileName} → ${folderName}`;
             } else {
+                resultItem.className = 'result-item error';
                 resultItem.textContent = `✗ ${fileName}: ${error}`;
             }
             
